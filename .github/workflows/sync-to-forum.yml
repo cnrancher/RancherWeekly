@@ -1,0 +1,36 @@
+name: Sync Articles to Rancher Forum
+
+on:
+  push:
+    branches:
+      - main  # 如果仓库的主分支是 master，请修改为 master
+    paths:
+      - '**.md' # 仅当有 md 文件变更时触发
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2 # 提取最近 2 个 commit，用于检测增量修改
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Run Sync Script
+        env:
+          RANCHER_FORUM_URL: "https://forums.rancher.cn"
+          RANCHER_FORUM_API_KEY: ${{ secrets.RANCHER_FORUM_API_KEY }}
+          RANCHER_FORUM_USER: ${{ secrets.RANCHER_FORUM_USER }}
+          RANCHER_FORUM_CATEGORY: ${{ secrets.RANCHER_FORUM_CATEGORY }}
+        run: |
+          python .github/scripts/sync.py
