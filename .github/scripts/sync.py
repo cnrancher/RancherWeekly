@@ -1,6 +1,7 @@
 import os
 import subprocess
 import requests
+from datetime import datetime  # 导入 datetime 模块
 
 FORUM_URL = os.environ.get("RANCHER_FORUM_URL", "https://forums.rancher.cn").rstrip("/")
 API_KEY = os.environ.get("RANCHER_FORUM_API_KEY")
@@ -16,7 +17,6 @@ HEADERS = {
 def get_changed_md_files():
     """获取本次 commit 新增或修改的 md 文件列表"""
     try:
-        # 比较上一次 commit 与当前 commit
         cmd = ["git", "diff", "--name-only", "--diff-filter=AM", "HEAD~1", "HEAD"]
         output = subprocess.check_output(cmd).decode("utf-8")
         files = output.splitlines()
@@ -26,17 +26,22 @@ def get_changed_md_files():
         return []
 
 def publish_to_discourse(file_path):
-    """提取 md 内容并调用 Discourse API 发帖"""
+    """提取 md 内容并在标题前自动拼接日期发布"""
     with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # 解析：默认将第一行作为论坛标题，其余作为正文
     lines = content.strip().split("\n")
-    title = lines[0].lstrip("# ").strip() if lines else os.path.basename(file_path)
+    raw_title = lines[0].lstrip("# ").strip() if lines else os.path.basename(file_path)
     body = "\n".join(lines[1:]).strip() if len(lines) > 1 else content
 
+    # 1. 获取当前日期 (格式: YYYY-MM-DD)
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    
+    # 2. 拼接标题，形成：[2026-08-06] Rancher 社区双周报 | Harvester 双版本重磅发布...
+    formatted_title = f"[{today_str}] {raw_title}"
+
     payload = {
-        "title": title,
+        "title": formatted_title,
         "raw": body,
         "category": CATEGORY_ID
     }
@@ -44,7 +49,7 @@ def publish_to_discourse(file_path):
     response = requests.post(f"{FORUM_URL}/posts.json", headers=HEADERS, json=payload)
     if response.status_code == 200:
         res_data = response.json()
-        print(f" Successfully published: {file_path} -> Topic ID: {res_data.get('topic_id')}, Post ID: {res_data.get('id')}")
+        print(f" Successfully published: {file_path} -> Title: {formatted_title}")
     else:
         print(f" Failed to publish {file_path}: {response.status_code} - {response.text}")
 
